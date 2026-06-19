@@ -147,7 +147,7 @@ const testCases = [
     },
     {
         name: '解析 proxy-groups 段',
-        description: '验证 Clash YAML 中的 proxy-groups 被收集以便后续合并',
+        description: '验证 Clash YAML 中的 proxy-groups 被解析（不再收集到 pendingUserProxyGroups — 该项特性已禁用）',
         input: `proxies:
   - name: Valid-SS
     type: ss
@@ -165,14 +165,8 @@ proxy-groups:
       - NotExist`,
         expected: {
             proxyCount: 1,
-            typeCount: { shadowsocks: 1 },
-            pendingUserProxyGroups: [
-                {
-                    name: '自定义选择',
-                    type: 'select',
-                    proxies: ['DIRECT', 'REJECT', 'Valid-SS', 'NotExist']
-                }
-            ]
+            typeCount: { shadowsocks: 1 }
+            // pendingUserProxyGroups 已被移除 — 订阅源的 proxy-groups 不再合并
         }
     }
 ];
@@ -233,14 +227,6 @@ function evaluateResult(items, builder, expected) {
                 report.messages.push(`Config field ${key} does not match expected value`);
             }
         });
-    }
-
-    // Check pendingUserProxyGroups (for deferred proxy-groups merge)
-    if (Array.isArray(expected.pendingUserProxyGroups)) {
-        if (JSON.stringify(builder.pendingUserProxyGroups) !== JSON.stringify(expected.pendingUserProxyGroups)) {
-            report.passed = false;
-            report.messages.push(`pendingUserProxyGroups does not match expected value`);
-        }
     }
 
     // Check proxy details (supports dot notation paths like "tls.alpn")
