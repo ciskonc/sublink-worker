@@ -258,7 +258,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     }
 
     addFallBackGroup(proxyList) {
-        const selectorMembers = this.buildSelectorMembers(proxyList);
+        let selectorMembers = this.buildSelectorMembers(proxyList);
+        if (DIRECT_DEFAULT_RULES.has('Fall Back')) {
+            selectorMembers = ['direct', ...selectorMembers.filter(p => p !== 'direct')];
+        }
         if (this.hasOutboundTag(this.t('outboundNames.Fall Back'))) return;
         this.config.outbounds.push({
             type: "selector",

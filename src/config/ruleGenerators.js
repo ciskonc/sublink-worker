@@ -18,6 +18,24 @@ function toStringArray(value) {
 	return [];
 }
 
+// Site rules that are part of GFW but have their own geosite classification in v2fly.
+// When only GFWList is selected (without their parent categories like Social Media,
+// Google, Youtube, Github), these site rules are automatically merged into GFWList
+// so that domains like x.com (geosite:twitter) are still covered.
+const GFW_PREREQUISITE_SITE_RULES = ['twitter', 'google', 'youtube', 'github', 'gitlab'];
+
+function collectGfwPrerequisiteSiteRules(selectedRules) {
+	const selectedRulesSet = new Set(selectedRules);
+	if (!selectedRulesSet.has('GFWList')) return [];
+	const covered = new Set();
+	UNIFIED_RULES.forEach(rule => {
+		if (selectedRulesSet.has(rule.name) && rule.name !== 'GFWList') {
+			rule.site_rules.forEach(sr => covered.add(sr));
+		}
+	});
+	return GFW_PREREQUISITE_SITE_RULES.filter(sr => !covered.has(sr));
+}
+
 // Helper function to get outbounds based on selected rule names
 export function getOutbounds(selectedRuleNames) {
 	if (!selectedRuleNames || !Array.isArray(selectedRuleNames)) {
@@ -42,9 +60,23 @@ export function generateRules(selectedRules = [], customRules = []) {
 
 	UNIFIED_RULES.forEach(rule => {
 		if (selectedRules.includes(rule.name)) {
+			let site_rules = [...rule.site_rules];
+			let ip_rules = [...rule.ip_rules];
+
+			// When GFWList is selected, merge prerequisite site rules
+			// (twitter/google/youtube/github/gitlab) that aren't covered
+			// by other explicitly selected rules. This ensures domains
+			// like x.com (geosite:twitter) are still covered by GFWList.
+			if (rule.name === 'GFWList') {
+				const prereq = collectGfwPrerequisiteSiteRules(selectedRules);
+				prereq.forEach(sr => {
+					if (!site_rules.includes(sr)) site_rules.push(sr);
+				});
+			}
+
 			rules.push({
-				site_rules: rule.site_rules,
-				ip_rules: rule.ip_rules,
+				site_rules,
+				ip_rules,
 				domain_suffix: rule?.domain_suffix,
 				ip_cidr: rule?.ip_cidr,
 				outbound: rule.name
@@ -91,6 +123,10 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
 			rule.ip_rules.forEach(ipRule => ipRuleSets.add(ipRule));
 		}
 	});
+
+	// When GFWList is selected, also pull prerequisite site rule sets
+	// (twitter/google/youtube/github/gitlab) so the provider URLs exist.
+	collectGfwPrerequisiteSiteRules(selectedRules).forEach(sr => siteRuleSets.add(sr));
 
 	const site_rule_sets = Array.from(siteRuleSets).map(rule => ({
 		tag: rule,
@@ -166,6 +202,10 @@ export function generateClashRuleSets(selectedRules = [], customRules = [], useM
 			rule.ip_rules.forEach(ipRule => ipRuleSets.add(ipRule));
 		}
 	});
+
+	// When GFWList is selected, also pull prerequisite site rule sets
+	// (twitter/google/youtube/github/gitlab) so the provider URLs exist.
+	collectGfwPrerequisiteSiteRules(selectedRules).forEach(sr => siteRuleSets.add(sr));
 
 	const site_rule_providers = {};
 	const ip_rule_providers = {};

@@ -68,7 +68,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
      * @returns {boolean} - True if format is Clash YAML
      */
     isCompatibleProviderFormat(format) {
-        return format === 'clash';
+        // Force inline parsing for all subscription formats.
+        // When multiple subscriptions are used, converting one to a
+        // proxy-provider causes the Clash client to fetch it at runtime,
+        // which often fails due to UA restrictions / token auth / IP bans.
+        return false;
     }
 
     /**
@@ -451,7 +455,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addFallBackGroup(proxyList) {
         const name = this.t('outboundNames.Fall Back');
         if (this.hasProxyGroup(name)) return;
-        const proxies = this.buildSelectGroupMembers(proxyList);
+        let proxies = this.buildSelectGroupMembers(proxyList);
+        if (DIRECT_DEFAULT_RULES.has('Fall Back')) {
+            proxies = ['DIRECT', ...proxies.filter(p => p !== 'DIRECT')];
+        }
         const group = {
             type: "select",
             name,

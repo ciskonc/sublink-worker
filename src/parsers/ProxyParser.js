@@ -1,6 +1,7 @@
 import { parseShadowsocks } from './protocols/shadowsocksParser.js';
 import { parseVmess } from './protocols/vmessParser.js';
 import { parseVless } from './protocols/vlessParser.js';
+import { parseAnytls } from './protocols/anytlsParser.js';
 import { parseHysteria2 } from './protocols/hysteria2Parser.js';
 import { parseTrojan } from './protocols/trojanParser.js';
 import { parseTuic } from './protocols/tuicParser.js';
@@ -10,6 +11,7 @@ const protocolParsers = {
     ss: parseShadowsocks,
     vmess: parseVmess,
     vless: parseVless,
+    anytls: parseAnytls,
     hysteria: parseHysteria2,
     hysteria2: parseHysteria2,
     hy2: parseHysteria2,
