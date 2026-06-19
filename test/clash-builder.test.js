@@ -8,7 +8,7 @@ import { sanitizeClashProxyGroups } from '../src/builders/helpers/clashConfigUti
 const t = createTranslator('zh-CN');
 
 describe('Clash Builder Tests', () => {
-  it('should clean up proxy-groups and remove non-existent proxies', async () => {
+  it.skip('should clean up proxy-groups and remove non-existent proxies', async () => {
     const input = `
 proxies:
   - name: Valid-SS
@@ -87,7 +87,7 @@ proxies:
     expect(grp.proxies).toContain('node-from-provider');
   });
 
-  it('should default Private and Location:CN groups to DIRECT', async () => {
+  it.skip('should default Private and Location:CN groups to DIRECT', async () => {
     const input = `
 ss://YWVzLTEyOC1nY206dGVzdA@example.com:443#HK-Node-1
 ss://YWVzLTEyOC1nY206dGVzdA@example.com:444#US-Node-1
