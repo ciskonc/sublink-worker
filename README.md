@@ -35,6 +35,16 @@ Want to try it out before deploying? Check out the live instance:
 
 Feel free to test subscription conversion, rule customization, and all supported protocols (SS/VMess/VLESS/AnyTLS/Hysteria2/Trojan/TUIC) directly in your browser. No installation required.
 
+### Web UI Preview
+
+<div align="center">
+
+![Sublink Worker Web UI](public/ui-screenshot.png)
+
+*Sublink Worker Web Interface — subscription input, rule selection, and output generation*
+
+</div>
+
 ## What's Changed (vs Upstream)
 
 ### AnyTLS Protocol Support

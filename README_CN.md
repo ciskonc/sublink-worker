@@ -35,6 +35,16 @@
 
 欢迎在浏览器中直接测试订阅转换、规则自定义以及所有支持的协议（SS/VMess/VLESS/AnyTLS/Hysteria2/Trojan/TUIC），无需安装任何环境。
 
+### 网页界面预览
+
+<div align="center">
+
+![Sublink Worker 网页界面](public/ui-screenshot.png)
+
+*Sublink Worker 网页界面 — 订阅输入、规则选择与输出生成*
+
+</div>
+
 ## 相较上游的改动
 
 ### AnyTLS 协议支持
