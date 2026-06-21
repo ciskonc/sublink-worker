@@ -19,7 +19,21 @@
     <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare Workers" style="height: 32px;"/>
   </a>
 </p>
+
+<p>
+  <a href="https://sublink-worker.nortons.workers.dev/">
+    <img src="https://img.shields.io/badge/Live%20Demo-Try%20It%20Now-brightgreen?style=for-the-badge&logo=cloudflare" alt="Live Demo"/>
+  </a>
+</p>
 </div>
+
+## 🚀 Live Demo
+
+Want to try it out before deploying? Check out the live instance:
+
+**👉 [https://sublink-worker.nortons.workers.dev/](https://sublink-worker.nortons.workers.dev/)**
+
+Feel free to test subscription conversion, rule customization, and all supported protocols (SS/VMess/VLESS/AnyTLS/Hysteria2/Trojan/TUIC) directly in your browser. No installation required.
 
 ## What's Changed (vs Upstream)
 

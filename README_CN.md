@@ -19,7 +19,21 @@
     <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare Workers" style="height: 32px;"/>
   </a>
 </p>
+
+<p>
+  <a href="https://sublink-worker.nortons.workers.dev/">
+    <img src="https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%94%A8-%E7%AB%8B%E5%8D%B3%E4%BD%93%E9%AA%8C-brightgreen?style=for-the-badge&logo=cloudflare" alt="在线试用"/>
+  </a>
+</p>
 </div>
+
+## 🚀 在线试用
+
+部署前想先体验一下？访问在线实例直接试用：
+
+**👉 [https://sublink-worker.nortons.workers.dev/](https://sublink-worker.nortons.workers.dev/)**
+
+欢迎在浏览器中直接测试订阅转换、规则自定义以及所有支持的协议（SS/VMess/VLESS/AnyTLS/Hysteria2/Trojan/TUIC），无需安装任何环境。
 
 ## 相较上游的改动
 
