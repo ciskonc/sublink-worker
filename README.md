@@ -39,7 +39,7 @@ Feel free to test subscription conversion, rule customization, and all supported
 
 <div align="center">
 
-![Sublink Worker Web UI](public/ui-screenshot.png)
+<img src="public/ui-screenshot.png" alt="Sublink Worker Web UI" width="50%"/>
 
 *Sublink Worker Web Interface — subscription input, rule selection, and output generation*
 

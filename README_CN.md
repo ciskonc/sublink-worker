@@ -39,7 +39,7 @@
 
 <div align="center">
 
-![Sublink Worker 网页界面](public/ui-screenshot.png)
+<img src="public/ui-screenshot.png" alt="Sublink Worker 网页界面" width="50%"/>
 
 *Sublink Worker 网页界面 — 订阅输入、规则选择与输出生成*
 
