@@ -62,6 +62,13 @@ Feel free to test subscription conversion, rule customization, and all supported
 - Rule priority: specific rules (Google, Telegram, Github...) > GFWList > Non-China (DIRECT) > Fall Back (DIRECT).
 - This implements a whitelist proxy mode: only GFW-blocked domains go through proxy, everything else is direct.
 
+### Optional Explicit GLOBAL Proxy-Group (Clash only)
+- Adds a Web UI toggle in **Advanced Options → General Settings**: *"GLOBAL group defaults to Node Select"*.
+- When enabled (off by default), the generated Clash config emits an **explicit `GLOBAL` proxy-group** whose first member is the `Node Select` group, instead of relying on mihomo's implicit GLOBAL group.
+- **Why**: Clash `global` mode routes all traffic through the GLOBAL group's currently selected node. mihomo's implicit GLOBAL group defaults to `DIRECT`, making `global` mode behave identically to `direct` mode — users clicking "Global" see no effect and mistakenly think the button is broken. With this toggle on, `global` mode immediately routes through the user's selected Node Select node.
+- Triggered via URL parameter `global_group_node_select=true` on the `/clash` endpoint.
+- Backward compatible: when the toggle is off, behavior is unchanged (mihomo implicit GLOBAL group is used).
+
 ### Supported Protocols
 ShadowSocks, VMess, VLESS, **AnyTLS**, Hysteria2, Trojan, TUIC
 

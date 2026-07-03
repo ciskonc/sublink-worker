@@ -62,6 +62,13 @@
 - 规则优先级：具体规则（Google、Telegram、Github...）> GFWList > 非中国（直连）> 漏网之鱼（直连）。
 - 实现白名单代理模式：仅被 GFW 封锁的域名走代理，其余全部直连。
 
+### 可选的显式 GLOBAL 代理组（仅 Clash 生效）
+- 在 **高级选项 → 通用设置** 中新增开关：**「GLOBAL 组默认走节点选择」**。
+- 开关默认关闭。启用后，生成的 Clash 配置会显式定义一个名为 `GLOBAL` 的 proxy-group，其首个成员为 `节点选择` 组，而不是依赖 mihomo 内核隐式创建的 GLOBAL 组。
+- **为什么需要**：Clash `global` 模式语义为「所有流量走 GLOBAL 组当前选中的节点」。mihomo 隐式 GLOBAL 组默认选中 `DIRECT`，导致 `global` 模式与 `direct` 模式行为完全相同——用户点击「全局」按钮看不到任何效果，会误以为按钮坏了。启用此开关后，`global` 模式会立即走 `节点选择` 组当前选中的节点。
+- 通过 `/clash` 端点的 URL 参数 `global_group_node_select=true` 触发。
+- 向后兼容：开关关闭时行为不变（继续使用 mihomo 隐式 GLOBAL 组）。
+
 ### 支持的协议
 ShadowSocks、VMess、VLESS、**AnyTLS**、Hysteria2、Trojan、TUIC
 
