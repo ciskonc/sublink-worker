@@ -48,7 +48,7 @@ function getClashUdpValue(proxy, defaultEnabled = true) {
 }
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, includeAutoSelect = true) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, includeAutoSelect = true, globalGroupNodeSelect = false) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
@@ -60,6 +60,61 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
+        // Clash 远程管理：启用后显式定义 GLOBAL proxy-group
+        // 默认指向 Node Select 组，避免 mihomo 用隐式 GLOBAL（默认指向 DIRECT）
+        this.globalGroupNodeSelect = globalGroupNodeSelect;
+    }
+
+    /**
+     * Add an explicit GLOBAL proxy-group so mihomo does not fall back to its
+     * implicit GLOBAL group (which defaults to DIRECT).
+     *
+     * Why: Clash `global` mode routes all traffic to the GLOBAL group's
+     * currently selected node. The implicit GLOBAL group defaults to DIRECT,
+     * making `global` mode behave identically to `direct` mode. By defining
+     * GLOBAL explicitly with Node Select as the first member, users switching
+     * to `global` mode will immediately route through the Node Select group
+     * instead of DIRECT.
+     *
+     * @param {string[]} proxyList - List of proxy names (for fallback members)
+     */
+    addGlobalGroup(proxyList) {
+        if (!this.globalGroupNodeSelect) return;
+        if (this.hasProxyGroup('GLOBAL')) return;
+
+        const nodeSelectName = this.t('outboundNames.Node Select');
+        const members = [];
+
+        // Put Node Select first so it becomes the default selected node
+        if (this.hasProxyGroup(nodeSelectName)) {
+            members.push(nodeSelectName);
+        }
+
+        // Add all proxies so users can manually switch to any node in GLOBAL
+        const proxyNames = uniqueNames(proxyList);
+        proxyNames.forEach(name => {
+            if (!members.includes(name)) {
+                members.push(name);
+            }
+        });
+
+        // Add special outbounds
+        if (!members.includes('DIRECT')) members.push('DIRECT');
+        if (!members.includes('REJECT')) members.push('REJECT');
+
+        const group = {
+            type: 'select',
+            name: 'GLOBAL',
+            proxies: members
+        };
+
+        // Add 'use' field if we have proxy-providers
+        const providerNames = this.getAllProviderNames();
+        if (providerNames.length > 0) {
+            group.use = providerNames;
+        }
+
+        this.config['proxy-groups'].push(group);
     }
 
     /**
@@ -666,6 +721,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 ...this.generateProxyProviders()
             };
         }
+
+        // Add explicit GLOBAL group after all other groups are generated
+        // Must run before sanitizeClashProxyGroups so sanitization can see it
+        this.addGlobalGroup(this.getProxyList());
 
         sanitizeClashProxyGroups(this.config);
         this.validateProxyGroups();
