@@ -209,6 +209,6 @@ export async function fetchSubscriptionWithFormat(url, userAgent, skipTlsVerify 
         return { content, format, url, subscriptionUserinfo };
     } catch (error) {
         console.error('Error fetching subscription:', error);
-        return null;
+        return { error: error.message, url };
     }
 }

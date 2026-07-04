@@ -755,6 +755,16 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             this.config['secret'] = secret;
         }
 
-        return yaml.dump(this.config);
+        let output = yaml.dump(this.config);
+
+        // Append fetch errors as comments for debugging
+        if (this.fetchErrors && this.fetchErrors.length > 0) {
+            const errorComments = this.fetchErrors.map(e =>
+                `# [Fetch Error] ${e.url}\n#   ${e.error}`
+            ).join('\n');
+            output = errorComments + '\n\n' + output;
+        }
+
+        return output;
     }
 }

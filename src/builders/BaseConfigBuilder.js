@@ -18,6 +18,7 @@ export class BaseConfigBuilder {
         this.providerUrls = [];  // URLs to use as providers (auto-sync)
         this.autoProviderDescriptors = undefined;
         this.subscriptionUserinfo = undefined;
+        this.fetchErrors = [];  // Collect fetch errors for debugging
     }
 
     async build() {
@@ -93,7 +94,11 @@ export class BaseConfigBuilder {
 
                     try {
                         const fetchResult = await fetchSubscriptionWithFormat(trimmedUrl, this.userAgent, this.skipTlsVerify);
-                        if (fetchResult) {
+                        if (fetchResult && fetchResult.error) {
+                            this.fetchErrors.push({ url: trimmedUrl, error: fetchResult.error });
+                            continue;
+                        }
+                        if (fetchResult && fetchResult.content) {
                             const { content, format, url: originalUrl, subscriptionUserinfo } = fetchResult;
 
                             if (subscriptionUserinfo && !this.subscriptionUserinfo) {
@@ -137,6 +142,7 @@ export class BaseConfigBuilder {
                         }
                     } catch (error) {
                         console.error('Error processing HTTP subscription:', error);
+                        this.fetchErrors.push({ url: trimmedUrl, error: error.message });
                     }
                     continue;
                 }
