@@ -17,6 +17,7 @@ import { ConfigStorageService } from '../services/configStorageService.js';
 import { ServiceError, MissingDependencyError } from '../services/errors.js';
 import { normalizeRuntime } from '../runtime/runtimeConfig.js';
 import { PREDEFINED_RULE_SETS, SING_BOX_CONFIG, SING_BOX_CONFIG_V1_11, generateSubconverterConfig } from '../config/index.js';
+import { buildSkipTlsFetchOptions } from '../parsers/subscription/httpSubscriptionFetcher.js';
 
 const DEFAULT_USER_AGENT = 'curl/7.74.0';
 
@@ -84,6 +85,7 @@ export function createApp(bindings = {}) {
             const externalController = c.req.query('external_controller');
             const externalUiDownloadUrl = c.req.query('external_ui_download_url');
             const configId = c.req.query('configId');
+            const skipTlsVerify = parseBooleanFlag(c.req.query('skip_tls_verify'));
             const lang = c.get('lang');
 
             const requestedSingboxVersion = c.req.query('singbox_version') || c.req.query('sb_version') || c.req.query('sb_ver');
@@ -111,7 +113,8 @@ export function createApp(bindings = {}) {
                 externalController,
                 externalUiDownloadUrl,
                 singboxConfigVersion,
-                includeAutoSelect
+                includeAutoSelect,
+                skipTlsVerify
             );
             await builder.build();
             const userinfo = builder.getSubscriptionUserinfo();
@@ -141,6 +144,7 @@ export function createApp(bindings = {}) {
             const externalUiDownloadUrl = c.req.query('external_ui_download_url');
             const globalGroupNodeSelect = parseBooleanFlag(c.req.query('global_group_node_select'));
             const configId = c.req.query('configId');
+            const skipTlsVerify = parseBooleanFlag(c.req.query('skip_tls_verify'));
             const lang = c.get('lang');
 
             let baseConfig;
@@ -161,7 +165,8 @@ export function createApp(bindings = {}) {
                 externalController,
                 externalUiDownloadUrl,
                 includeAutoSelect,
-                globalGroupNodeSelect
+                globalGroupNodeSelect,
+                skipTlsVerify
             );
             await builder.build();
             const userinfo = builder.getSubscriptionUserinfo();
@@ -188,6 +193,7 @@ export function createApp(bindings = {}) {
             const groupByCountry = parseBooleanFlag(c.req.query('group_by_country'));
             const includeAutoSelect = c.req.query('include_auto_select') !== 'false';
             const configId = c.req.query('configId');
+            const skipTlsVerify = parseBooleanFlag(c.req.query('skip_tls_verify'));
             const lang = c.get('lang');
 
             let baseConfig;
@@ -204,7 +210,8 @@ export function createApp(bindings = {}) {
                 lang,
                 ua,
                 groupByCountry,
-                includeAutoSelect
+                includeAutoSelect,
+                skipTlsVerify
             );
             builder.setSubscriptionUrl(c.req.url);
             await builder.build();
@@ -273,6 +280,7 @@ export function createApp(bindings = {}) {
         let subscriptionUserinfo;
         const userAgent = c.req.query('ua') || getRequestHeader(c.req, 'User-Agent') || DEFAULT_USER_AGENT;
         const headers = { 'User-Agent': userAgent };
+        const skipTlsVerify = parseBooleanFlag(c.req.query('skip_tls_verify'));
 
         for (const proxy of proxylist) {
             const trimmedProxy = proxy.trim();
@@ -280,7 +288,8 @@ export function createApp(bindings = {}) {
 
             if (trimmedProxy.startsWith('http://') || trimmedProxy.startsWith('https://')) {
                 try {
-                    const response = await fetch(trimmedProxy, { method: 'GET', headers });
+                    const fetchOpts = await buildSkipTlsFetchOptions(headers, skipTlsVerify);
+                    const response = await fetch(trimmedProxy, fetchOpts);
                     const fetchedUserinfo = response.headers.get('subscription-userinfo');
                     if (fetchedUserinfo && subscriptionUserinfo === undefined) {
                         subscriptionUserinfo = fetchedUserinfo;

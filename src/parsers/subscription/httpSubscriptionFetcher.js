@@ -117,21 +117,58 @@ function detectFormat(content) {
 }
 
 /**
+ * Build fetch options with optional TLS verification skip
+ * @param {Headers} headers - Request headers
+ * @param {boolean} skipTlsVerify - Whether to skip TLS certificate verification
+ * @returns {Promise<object>} - Fetch options
+ */
+async function buildFetchOptions(headers, skipTlsVerify) {
+    const options = { method: 'GET', headers };
+    if (skipTlsVerify) {
+        try {
+            const { Agent } = await import('undici');
+            options.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+        } catch {
+            console.warn('skipTlsVerify is enabled but undici is not available (likely Cloudflare Workers). TLS verification cannot be skipped on this platform.');
+        }
+    }
+    return options;
+}
+
+/**
+ * Build fetch options with optional TLS verification skip (exported for reuse)
+ * @param {object} headers - Request headers (plain object)
+ * @param {boolean} skipTlsVerify - Whether to skip TLS certificate verification
+ * @returns {Promise<object>} - Fetch options
+ */
+export async function buildSkipTlsFetchOptions(headers, skipTlsVerify = false) {
+    const options = { method: 'GET', headers };
+    if (skipTlsVerify) {
+        try {
+            const { Agent } = await import('undici');
+            options.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+        } catch {
+            console.warn('skipTlsVerify is enabled but undici is not available. TLS verification cannot be skipped on this platform.');
+        }
+    }
+    return options;
+}
+
+/**
  * Fetch subscription content from a URL and parse it
  * @param {string} url - The subscription URL to fetch
  * @param {string} userAgent - Optional User-Agent header
+ * @param {boolean} skipTlsVerify - Whether to skip TLS certificate verification
  * @returns {Promise<object|string[]|null>} - Parsed subscription content
  */
-export async function fetchSubscription(url, userAgent) {
+export async function fetchSubscription(url, userAgent, skipTlsVerify = false) {
     try {
         const headers = new Headers();
         if (userAgent) {
             headers.set('User-Agent', userAgent);
         }
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: headers
-        });
+        const fetchOptions = await buildFetchOptions(headers, skipTlsVerify);
+        const response = await fetch(url, fetchOptions);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -149,18 +186,17 @@ export async function fetchSubscription(url, userAgent) {
  * Fetch subscription content and detect its format without parsing
  * @param {string} url - The subscription URL to fetch
  * @param {string} userAgent - Optional User-Agent header
+ * @param {boolean} skipTlsVerify - Whether to skip TLS certificate verification
  * @returns {Promise<{content: string, format: 'clash'|'singbox'|'surge'|'unknown', url: string, subscriptionUserinfo?: string}|null>}
  */
-export async function fetchSubscriptionWithFormat(url, userAgent) {
+export async function fetchSubscriptionWithFormat(url, userAgent, skipTlsVerify = false) {
     try {
         const headers = new Headers();
         if (userAgent) {
             headers.set('User-Agent', userAgent);
         }
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: headers
-        });
+        const fetchOptions = await buildFetchOptions(headers, skipTlsVerify);
+        const response = await fetch(url, fetchOptions);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
