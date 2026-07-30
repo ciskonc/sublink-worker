@@ -1,4 +1,4 @@
-import { parseServerInfo, parseUrlParams, createTlsConfig, parseBool } from '../../utils.js';
+import { parseServerInfo, parseUrlParams, parseBool } from '../../utils.js';
 
 /**
  * Parse an anytls:// URI into a standardized proxy object.
@@ -13,11 +13,18 @@ export function parseAnytls(url) {
     const [password, serverInfo] = addressPart.split('@');
     const { host, port } = parseServerInfo(serverInfo);
 
-    // anytls always uses TLS, but we still use createTlsConfig for consistency
-    const tls = createTlsConfig(params);
+    // anytls is always TLS-based; do NOT rely on createTlsConfig because it
+    // gates TLS on params.security being present. anytls URIs in the wild
+    // typically omit security= and only carry sni/fp/insecure, which would
+    // cause TLS fields to be dropped and nodes to fail TLS handshake.
+    const tls = {
+        enabled: true,
+        server_name: params.sni || params.host || '',
+        insecure: !!params?.allowInsecure || !!params?.insecure || !!params?.allow_insecure,
+    };
 
     // Preserve utls fingerprint if specified (e.g. fp=firefox, fp=chrome)
-    if (params.fp && tls.enabled) {
+    if (params.fp) {
         tls.utls = {
             enabled: true,
             fingerprint: params.fp
