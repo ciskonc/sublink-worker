@@ -41,6 +41,10 @@ export function parseVmess(url) {
     const transportType = vmessConfig.type || networkType;
 
     const tlsEnabled = vmessConfig.tls && vmessConfig.tls !== '' && vmessConfig.tls !== 'none';
+    // vmess+ws+no-tls (CDN reverse proxy) requires security: 'none' for mihomo compatibility;
+    // xray-core treats missing scy as 'none' but mihomo's 'auto' may pick wrong cipher → 502.
+    const isWebSocketNoTls = networkType === 'ws' && !tlsEnabled;
+    const defaultSecurity = isWebSocketNoTls ? 'none' : 'auto';
     if (tlsEnabled) {
         tls = {
             enabled: true,
@@ -85,9 +89,12 @@ export function parseVmess(url) {
         server_port: parseInt(vmessConfig.port),
         uuid: vmessConfig.id,
         alter_id: parseInt(vmessConfig.aid) || 0,
-        security: vmessConfig.scy || 'auto',
+        security: vmessConfig.scy || defaultSecurity,
         tcp_fast_open: false,
         transport,
-        tls: tls.enabled ? tls : undefined
+        tls: tls.enabled ? tls : undefined,
+        // Pass through optional fields if specified in source URL (smart, not blind)
+        ...(vmessConfig.fp ? { fingerprint: vmessConfig.fp } : {}),
+        ...(vmessConfig.alpn ? { alpn: vmessConfig.alpn } : {}),
     };
 }
