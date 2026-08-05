@@ -107,17 +107,44 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         delete sanitized.udp;
         delete sanitized.network;
 
-        // Remove 'alpn' from root level - it should only exist inside 'tls' object for sing-box
-        // For protocols like vless/vmess, alpn belongs inside the tls configuration
-        if (sanitized.alpn && sanitized.tls) {
-            // Move alpn into tls if tls exists and doesn't have alpn
-            if (!sanitized.tls.alpn) {
-                sanitized.tls = { ...sanitized.tls, alpn: sanitized.alpn };
+        // uTLS / ALPN only meaningful when TLS is actually enabled. Guard both
+        // branches with the same `tlsUsable` check so we never write utls/alpn
+        // under a `tls: {enabled: false}` stub (Verifier F-2 finding from
+        // commit de5ec95).
+        const tlsUsable = !!(sanitized.tls && sanitized.tls.enabled !== false);
+
+        // Move 'alpn' from root level into 'tls.alpn' for sing-box (Clash outputs
+        // root-level alpn; sing-box requires it nested under tls). Also normalize
+        // to array — sing-box rejects string, vmess URLs may pass single string.
+        if (sanitized.alpn) {
+            if (tlsUsable && !sanitized.tls.alpn) {
+                const alpnValue = Array.isArray(sanitized.alpn)
+                    ? sanitized.alpn
+                    : String(sanitized.alpn).split(',').map(s => s.trim()).filter(Boolean);
+                sanitized.tls = { ...sanitized.tls, alpn: alpnValue };
             }
+            // Always drop root-level alpn — either moved into tls or unusable
             delete sanitized.alpn;
-        } else if (sanitized.alpn && !sanitized.tls) {
-            // No TLS, remove alpn entirely
-            delete sanitized.alpn;
+        }
+
+        // Move 'fingerprint' from root level into 'tls.utls.fingerprint' for sing-box
+        // (Clash uses root-level 'client-fingerprint'; sing-box requires nesting under
+        // tls.utls). Without this nesting, sing-box silently ignores fingerprint and
+        // uTLS handshakes fall back to default fingerprint, breaking CDN/anti-probe evasion.
+        //
+        // F-1 (commit 7cca6b0 review): `enabled: true` MUST be placed AFTER the spread
+        // so it wins against `existing.enabled`. JS object spread: later keys override
+        // earlier ones. All 9 current utls sources in this repo write `enabled: true`
+        // so practical impact is zero today, but the design intent must match code
+        // semantics to guard against future sources that write `enabled: false`.
+        if (sanitized.fingerprint) {
+            if (tlsUsable) {
+                const utls = { ...(sanitized.tls.utls || {}), enabled: true, fingerprint: sanitized.fingerprint };
+                sanitized.tls = { ...sanitized.tls, utls };
+            }
+            // Drop fingerprint when TLS is disabled or absent — uTLS is meaningless
+            // without TLS, and writing utls under a disabled-tls stub is dead config.
+            delete sanitized.fingerprint;
         }
 
         // Remove packet_encoding for now - it's version-specific in sing-box
