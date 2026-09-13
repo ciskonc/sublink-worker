@@ -5,6 +5,7 @@ import { parseAnytls } from './protocols/anytlsParser.js';
 import { parseHysteria2 } from './protocols/hysteria2Parser.js';
 import { parseTrojan } from './protocols/trojanParser.js';
 import { parseTuic } from './protocols/tuicParser.js';
+import { parseAnytls } from './protocols/anytlsParser.js';
 import { fetchSubscription } from './subscription/httpSubscriptionFetcher.js';
 
 const protocolParsers = {
@@ -18,7 +19,8 @@ const protocolParsers = {
     http: fetchSubscription,
     https: fetchSubscription,
     trojan: parseTrojan,
-    tuic: parseTuic
+    tuic: parseTuic,
+    anytls: parseAnytls
 };
 
 export class ProxyParser {
@@ -27,7 +29,7 @@ export class ProxyParser {
             return undefined;
         }
         const trimmed = url.trim();
-        const type = trimmed.split('://')[0];
+        const type = trimmed.split('://')[0].toLowerCase();
         const parser = protocolParsers[type];
         if (!parser) {
             return undefined;

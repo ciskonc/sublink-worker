@@ -1,60 +1,92 @@
-import { parseServerInfo, parseUrlParams, parseBool } from '../../utils.js';
+import { parseArray, parseBool, parseMaybeNumber } from '../../utils.js';
 
-/**
- * Parse an anytls:// URI into a standardized proxy object.
- * anytls URIs share the same structure as vless:// (UUID@Server:Port?params#name),
- * but the underlying protocol is different. Sing-Box and Clash Meta both
- * treat anytls as a first-class type distinct from vless.
- *
- * Example: anytls://uuid@host:port?security=tls&sni=example.com&fp=firefox&insecure=1&type=tcp#NodeName
- */
+function getFirstParam(searchParams, keys) {
+    for (const key of keys) {
+        if (searchParams.has(key)) {
+            return searchParams.get(key);
+        }
+    }
+    return undefined;
+}
+
+function parseOptionalNumber(value) {
+    if (value === undefined || value === null || String(value).trim() === '') {
+        return undefined;
+    }
+    const parsed = parseMaybeNumber(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function decodeComponent(value) {
+    try {
+        return decodeURIComponent(value);
+    } catch (_) {
+        return value;
+    }
+}
+
 export function parseAnytls(url) {
-    const { addressPart, params, name } = parseUrlParams(url);
-    const [password, serverInfo] = addressPart.split('@');
-    const { host, port } = parseServerInfo(serverInfo);
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol.toLowerCase() !== 'anytls:') {
+        return undefined;
+    }
 
-    // anytls is always TLS-based; do NOT rely on createTlsConfig because it
-    // gates TLS on params.security being present. anytls URIs in the wild
-    // typically omit security= and only carry sni/fp/insecure, which would
-    // cause TLS fields to be dropped and nodes to fail TLS handshake.
+    const server = parsedUrl.hostname.startsWith('[') && parsedUrl.hostname.endsWith(']')
+        ? parsedUrl.hostname.slice(1, -1)
+        : parsedUrl.hostname;
+    const port = parsedUrl.port ? parseInt(parsedUrl.port) : 443;
+    const password = decodeComponent(parsedUrl.username);
+    const fragment = decodeComponent(parsedUrl.hash.slice(1));
+    const defaultTagServer = server.includes(':') ? `[${server}]` : server;
+    const params = parsedUrl.searchParams;
+
     const tls = {
         enabled: true,
-        server_name: params.sni || params.host || '',
-        insecure: !!params?.allowInsecure || !!params?.insecure || !!params?.allow_insecure,
+        insecure: parseBool(
+            getFirstParam(params, ['insecure', 'skip-cert-verify', 'allowInsecure', 'allow_insecure']),
+            false
+        )
     };
+    const serverName = getFirstParam(params, ['sni', 'servername', 'host']);
+    if (serverName) {
+        tls.server_name = serverName;
+    }
 
-    // Preserve utls fingerprint if specified (e.g. fp=firefox, fp=chrome)
-    if (params.fp) {
+    // These extensions are emitted by established AnyTLS clients even though
+    // the core URI specification intentionally guarantees only sni/insecure.
+    const alpn = parseArray(getFirstParam(params, ['alpn']));
+    if (alpn) {
+        tls.alpn = alpn;
+    }
+    const fingerprint = getFirstParam(params, ['fp', 'fingerprint', 'client-fingerprint']);
+    if (fingerprint) {
         tls.utls = {
             enabled: true,
-            fingerprint: params.fp
+            fingerprint
         };
     }
 
-    const udp = params.udp !== undefined ? parseBool(params.udp) : undefined;
+    const udp = parseBool(getFirstParam(params, ['udp']));
+    const idleSessionCheckInterval = parseOptionalNumber(
+        getFirstParam(params, ['idle-session-check-interval', 'idle_session_check_interval'])
+    );
+    const idleSessionTimeout = parseOptionalNumber(
+        getFirstParam(params, ['idle-session-timeout', 'idle_session_timeout'])
+    );
+    const minIdleSession = parseOptionalNumber(
+        getFirstParam(params, ['min-idle-session', 'min_idle_session'])
+    );
 
-    // idle-session parameters (anytls specific)
-    const result = {
+    return {
+        tag: fragment || `AnyTLS ${defaultTagServer}:${port}`,
         type: 'anytls',
-        tag: name,
-        server: host,
+        server,
         server_port: port,
-        password: decodeURIComponent(password),
-        tcp_fast_open: false,
-        tls,
-        ...(udp !== undefined ? { udp } : {})
+        password,
+        ...(udp !== undefined ? { udp } : {}),
+        ...(idleSessionCheckInterval !== undefined ? { 'idle-session-check-interval': idleSessionCheckInterval } : {}),
+        ...(idleSessionTimeout !== undefined ? { 'idle-session-timeout': idleSessionTimeout } : {}),
+        ...(minIdleSession !== undefined ? { 'min-idle-session': minIdleSession } : {}),
+        tls
     };
-
-    // AnyTLS specific idle session parameters
-    if (params['idle-session-check-interval'] !== undefined) {
-        result['idle-session-check-interval'] = params['idle-session-check-interval'];
-    }
-    if (params['idle-session-timeout'] !== undefined) {
-        result['idle-session-timeout'] = params['idle-session-timeout'];
-    }
-    if (params['min-idle-session'] !== undefined) {
-        result['min-idle-session'] = params['min-idle-session'];
-    }
-
-    return result;
 }
