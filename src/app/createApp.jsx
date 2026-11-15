@@ -18,6 +18,8 @@ import { ServiceError, MissingDependencyError } from '../services/errors.js';
 import { normalizeRuntime } from '../runtime/runtimeConfig.js';
 import { PREDEFINED_RULE_SETS, SING_BOX_CONFIG, SING_BOX_CONFIG_V1_11, generateSubconverterConfig } from '../config/index.js';
 import { buildSkipTlsFetchOptions } from '../parsers/subscription/httpSubscriptionFetcher.js';
+import { checkOutput } from '../builders/helpers/outputGuard.js';
+import { buildCacheKey, readCached, writeCached } from '../services/outputCacheService.js';
 
 const DEFAULT_USER_AGENT = 'curl/7.74.0';
 
@@ -121,6 +123,35 @@ export function createApp(bindings = {}) {
             if (userinfo) {
                 c.header('subscription-userinfo', userinfo);
             }
+
+            const singboxCacheKey = buildCacheKey({
+                target: 'singbox',
+                configId,
+                config,
+                selectedRules: JSON.stringify(selectedRules),
+                customRules: JSON.stringify(customRules),
+                ua,
+                lang,
+                groupByCountry,
+                includeAutoSelect,
+                enableClashUI,
+                externalController,
+                externalUiDownloadUrl,
+                skipTlsVerify
+            });
+
+            const singboxOutput = JSON.stringify(builder.config);
+            const singboxVerdict = checkOutput(singboxOutput, 'singbox');
+            if (!singboxVerdict.ok) {
+                console.warn(`incomplete singbox output (${singboxVerdict.reason}); falling back to cache`);
+                const cached = await readCached(runtime.kv, singboxCacheKey);
+                if (cached) {
+                    return c.json(JSON.parse(cached), 200, { 'X-Sublink-Cache': 'fallback' });
+                }
+                throw new Error(`incomplete config: ${singboxVerdict.reason}`);
+            }
+
+            await writeCached(runtime.kv, singboxCacheKey, singboxOutput);
             return c.json(builder.config);
         } catch (error) {
             return handleError(c, error, runtime.logger);
@@ -153,6 +184,23 @@ export function createApp(bindings = {}) {
                 baseConfig = await storage.getConfigById(configId);
             }
 
+            const cacheKey = buildCacheKey({
+                target: 'clash',
+                configId,
+                config,
+                selectedRules: JSON.stringify(selectedRules),
+                customRules: JSON.stringify(customRules),
+                ua,
+                lang,
+                groupByCountry,
+                includeAutoSelect,
+                enableClashUI,
+                externalController,
+                externalUiDownloadUrl,
+                globalGroupNodeSelect,
+                skipTlsVerify
+            });
+
             const builder = new ClashConfigBuilder(
                 config,
                 selectedRules,
@@ -174,8 +222,51 @@ export function createApp(bindings = {}) {
             if (userinfo) {
                 headers['subscription-userinfo'] = userinfo;
             }
-            return c.text(builder.formatConfig(), 200, headers);
+
+            const output = builder.formatConfig();
+            const verdict = checkOutput(output, 'clash');
+            if (!verdict.ok) {
+                // Never hand a structurally broken config to a client: serve the
+                // last known-good conversion instead.
+                console.warn(`incomplete clash output (${verdict.reason}); falling back to cache`);
+                const cached = await readCached(runtime.kv, cacheKey);
+                if (cached) {
+                    return c.text(cached, 200, { ...headers, 'X-Sublink-Cache': 'fallback' });
+                }
+                throw new Error(`incomplete config: ${verdict.reason}`);
+            }
+
+            await writeCached(runtime.kv, cacheKey, output);
+            return c.text(output, 200, headers);
         } catch (error) {
+            // Last resort: serve the cached config even when the build threw.
+            try {
+                const cacheKey = buildCacheKey({
+                    target: 'clash',
+                    configId: c.req.query('configId'),
+                    config: c.req.query('config'),
+                    selectedRules: JSON.stringify(parseSelectedRules(c.req.query('selectedRules'))),
+                    customRules: JSON.stringify(parseJsonArray(c.req.query('customRules'))),
+                    ua: c.req.query('ua') || getRequestHeader(c.req, 'User-Agent') || DEFAULT_USER_AGENT,
+                    lang: c.get('lang'),
+                    groupByCountry: parseBooleanFlag(c.req.query('group_by_country')),
+                    includeAutoSelect: c.req.query('include_auto_select') !== 'false',
+                    enableClashUI: parseBooleanFlag(c.req.query('enable_clash_ui')),
+                    externalController: c.req.query('external_controller'),
+                    externalUiDownloadUrl: c.req.query('external_ui_download_url'),
+                    globalGroupNodeSelect: parseBooleanFlag(c.req.query('global_group_node_select')),
+                    skipTlsVerify: parseBooleanFlag(c.req.query('skip_tls_verify'))
+                });
+                const cached = await readCached(runtime.kv, cacheKey);
+                if (cached) {
+                    return c.text(cached, 200, {
+                        'Content-Type': 'text/yaml; charset=utf-8',
+                        'X-Sublink-Cache': 'fallback-error'
+                    });
+                }
+            } catch (cacheError) {
+                console.warn(`cache fallback failed: ${cacheError?.message}`);
+            }
             return handleError(c, error, runtime.logger);
         }
     });
@@ -220,7 +311,33 @@ export function createApp(bindings = {}) {
             if (userinfo) {
                 c.header('subscription-userinfo', userinfo);
             }
-            return c.text(builder.formatConfig());
+
+            const surgeCacheKey = buildCacheKey({
+                target: 'surge',
+                configId,
+                config,
+                selectedRules: JSON.stringify(selectedRules),
+                customRules: JSON.stringify(customRules),
+                ua,
+                lang,
+                groupByCountry,
+                includeAutoSelect,
+                skipTlsVerify
+            });
+
+            const surgeOutput = builder.formatConfig();
+            const surgeVerdict = checkOutput(surgeOutput, 'surge');
+            if (!surgeVerdict.ok) {
+                console.warn(`incomplete surge output (${surgeVerdict.reason}); falling back to cache`);
+                const cached = await readCached(runtime.kv, surgeCacheKey);
+                if (cached) {
+                    return c.text(cached, 200, { 'X-Sublink-Cache': 'fallback' });
+                }
+                throw new Error(`incomplete config: ${surgeVerdict.reason}`);
+            }
+
+            await writeCached(runtime.kv, surgeCacheKey, surgeOutput);
+            return c.text(surgeOutput);
         } catch (error) {
             return handleError(c, error, runtime.logger);
         }

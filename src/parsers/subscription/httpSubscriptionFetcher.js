@@ -168,11 +168,7 @@ export async function fetchSubscription(url, userAgent, skipTlsVerify = false) {
             headers.set('User-Agent', userAgent);
         }
         const fetchOptions = await buildFetchOptions(headers, skipTlsVerify);
-        const response = await fetch(url, fetchOptions);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const text = await response.text();
+        const { text } = await fetchWithRetry(url, fetchOptions);
         const decodedText = decodeContent(text);
 
         return parseSubscriptionContent(decodedText);
@@ -180,6 +176,60 @@ export async function fetchSubscription(url, userAgent, skipTlsVerify = false) {
         console.error('Error fetching or parsing HTTP(S) content:', error);
         return null;
     }
+}
+
+/**
+ * Fetch with timeout, bounded retries and body-completeness validation.
+ *
+ * Rationale: upstream CDNs (e.g. GitHub raw for the relay store) occasionally
+ * answer with a truncated body. A partial body used to be parsed as if it were
+ * complete, which silently produced configs with missing proxies AND missing
+ * trailing rules (the `rules:` section sits at the very end of the YAML).
+ *
+ * @param {string} url - Target URL
+ * @param {object} fetchOptions - fetch options
+ * @param {object} [opts] - { retries, timeoutMs }
+ * @returns {Promise<Response>} - A response whose body is known to be complete
+ */
+async function fetchWithRetry(url, fetchOptions, opts = {}) {
+    const retries = opts.retries ?? 3;
+    const timeoutMs = opts.timeoutMs ?? 15000;
+    let lastError;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            let response;
+            let text;
+            try {
+                response = await fetch(url, { ...fetchOptions, signal: controller.signal });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                text = await response.text();
+            } finally {
+                clearTimeout(timer);
+            }
+
+            // Content-Length is not always present (chunked encoding), so only
+            // validate when the server declared it.
+            const declared = Number(response.headers.get('content-length') || 0);
+            if (declared && text.length !== declared) {
+                throw new Error(`incomplete body: received ${text.length} of ${declared} bytes`);
+            }
+
+            return { response, text };
+        } catch (error) {
+            lastError = error;
+            const isLast = attempt === retries;
+            console.warn(`fetch attempt ${attempt + 1}/${retries + 1} failed for ${url}: ${error.message}`);
+            if (isLast) break;
+            await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+        }
+    }
+
+    throw lastError;
 }
 
 /**
@@ -196,11 +246,7 @@ export async function fetchSubscriptionWithFormat(url, userAgent, skipTlsVerify 
             headers.set('User-Agent', userAgent);
         }
         const fetchOptions = await buildFetchOptions(headers, skipTlsVerify);
-        const response = await fetch(url, fetchOptions);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const text = await response.text();
+        const { response, text } = await fetchWithRetry(url, fetchOptions);
         const content = decodeContent(text);
         const format = detectFormat(content);
 

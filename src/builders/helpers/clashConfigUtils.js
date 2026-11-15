@@ -48,7 +48,11 @@ export function emitClashRules(rules = [], translator) {
         .filter(rule => Array.isArray(rule.ip_cidr) && rule.ip_cidr.length > 0)
         .forEach(rule => {
             rule.ip_cidr.forEach(cidr => {
-                results.push(`IP-CIDR,${cidr},${translator('outboundNames.' + rule.outbound)},no-resolve`);
+                // Emitted WITHOUT the `no-resolve` parameter (3-field form, matching
+                // Clash Verge's documented "IP-CIDR,192.168.0.0/16,DIRECT" pattern).
+                // Some clients/mergers drop 4-field rules, which would silently
+                // remove LAN direct rules from the generated config.
+                results.push(`IP-CIDR,${cidr},${translator('outboundNames.' + rule.outbound)}`);
             });
         });
 

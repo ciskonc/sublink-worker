@@ -34,7 +34,18 @@ export const UNIFIED_RULES = [
 	{
 		name: 'Private',
 		site_rules: [],
-		ip_rules: ['private']
+		ip_rules: ['private'],
+		// Explicit private-range CIDRs: keeps LAN traffic on DIRECT even when the
+		// `private` rule-set provider is unavailable or filtered out downstream.
+		ip_cidr: [
+			'10.0.0.0/8',
+			'100.64.0.0/10',
+			'127.0.0.0/8',
+			'169.254.0.0/16',
+			'172.16.0.0/12',
+			'192.168.0.0/16',
+			'198.18.0.0/15'
+		]
 	},
 	{
 		name: 'Location:CN',
