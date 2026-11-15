@@ -19,7 +19,7 @@ import { normalizeRuntime } from '../runtime/runtimeConfig.js';
 import { PREDEFINED_RULE_SETS, SING_BOX_CONFIG, SING_BOX_CONFIG_V1_11, generateSubconverterConfig } from '../config/index.js';
 import { buildSkipTlsFetchOptions } from '../parsers/subscription/httpSubscriptionFetcher.js';
 import { checkOutput } from '../builders/helpers/outputGuard.js';
-import { buildCacheKey, readCached, writeCached } from '../services/outputCacheService.js';
+import { buildCacheKey, readCached, readCachedWithAge, writeCached, defaultMaxAgeMs } from '../services/outputCacheService.js';
 
 const DEFAULT_USER_AGENT = 'curl/7.74.0';
 
@@ -216,9 +216,22 @@ export function createApp(bindings = {}) {
                 globalGroupNodeSelect,
                 skipTlsVerify
             );
+
+            // Cache-first: serving a fresh cached body keeps the per-request work
+            // (upstream fetch + 74 proxies conversion + YAML serialization) off the
+            // hot path, which is what keeps large responses from being cut off.
+            const cachedEntry = await readCachedWithAge(runtime.kv, cacheKey);
+            if (cachedEntry && cachedEntry.ageMs < defaultMaxAgeMs()) {
+                return c.text(cachedEntry.body, 200, {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'X-Sublink-Cache': 'hit',
+                    'Cache-Control': 'no-store'
+                });
+            }
+
             await builder.build();
             const userinfo = builder.getSubscriptionUserinfo();
-            const headers = { 'Content-Type': 'text/yaml; charset=utf-8' };
+            const headers = { 'Content-Type': 'text/plain; charset=utf-8' };
             if (userinfo) {
                 headers['subscription-userinfo'] = userinfo;
             }
@@ -237,7 +250,11 @@ export function createApp(bindings = {}) {
             }
 
             await writeCached(runtime.kv, cacheKey, output);
-            return c.text(output, 200, headers);
+            // `text/plain` is on the CDN's compressible content-type list while
+            // `text/yaml` is not: with text/plain the edge serves gzip when the
+            // client asks for it, which keeps the transfer small (44 KB -> ~9 KB)
+            // and avoids truncated downloads on long/lossy paths.
+            return c.text(output, 200, { ...headers, 'Content-Type': 'text/plain; charset=utf-8' });
         } catch (error) {
             // Last resort: serve the cached config even when the build threw.
             try {
@@ -260,7 +277,7 @@ export function createApp(bindings = {}) {
                 const cached = await readCached(runtime.kv, cacheKey);
                 if (cached) {
                     return c.text(cached, 200, {
-                        'Content-Type': 'text/yaml; charset=utf-8',
+                        'Content-Type': 'text/plain; charset=utf-8',
                         'X-Sublink-Cache': 'fallback-error'
                     });
                 }
