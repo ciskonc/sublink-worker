@@ -270,7 +270,12 @@ export function parseServerInfo(serverInfo) {
 }
 
 export function parseUrlParams(url) {
-	const [, rest] = url.split('://');
+	// Split on the FIRST "://" only. A subscription URI may carry another
+	// "://" inside a parameter (e.g. ech=cloudflare-ech.com+https://...), and
+	// splitting on every occurrence used to cut the name fragment away, which
+	// silently dropped those nodes from the generated config.
+	const schemeEnd = url.indexOf('://');
+	const rest = schemeEnd >= 0 ? url.slice(schemeEnd + 3) : url;
 	const [addressPart, ...remainingParts] = rest.split('?');
 	const paramsPart = remainingParts.join('?');
 
