@@ -772,6 +772,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             output = errorComments + '\n\n' + output;
         }
 
+        // Diagnostic header: what was fetched upstream and how much of it made
+        // it into the generated config. Makes "missing nodes" verifiable from
+        // the client side without server access.
+        if (this.fetchDiagnostics && this.fetchDiagnostics.length > 0) {
+            const emitted = Array.isArray(this.config.proxies) ? this.config.proxies.length : 0;
+            const diagLines = this.fetchDiagnostics.map(d =>
+                `# [Sync] src=${d.url}\n#   bytes=${d.bytes} format=${d.format ?? 'unknown'} emitted_proxies=${emitted}`
+            ).join('\n');
+            output = diagLines + '\n\n' + output;
+        }
+
         return output;
     }
 }
