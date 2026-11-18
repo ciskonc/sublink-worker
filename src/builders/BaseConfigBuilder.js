@@ -19,6 +19,7 @@ export class BaseConfigBuilder {
         this.autoProviderDescriptors = undefined;
         this.subscriptionUserinfo = undefined;
         this.fetchErrors = [];  // Collect fetch errors for debugging
+        this.fetchDiagnostics = [];
     }
 
     async build() {
@@ -99,7 +100,8 @@ export class BaseConfigBuilder {
                             continue;
                         }
                         if (fetchResult && fetchResult.content) {
-                            const { content, format, url: originalUrl, subscriptionUserinfo } = fetchResult;
+                            const { content, format, url: originalUrl, subscriptionUserinfo, bytes } = fetchResult;
+                            this.fetchDiagnostics.push({ url: trimmedUrl, bytes: bytes ?? content?.length ?? 0, format });
 
                             if (subscriptionUserinfo && !this.subscriptionUserinfo) {
                                 this.subscriptionUserinfo = subscriptionUserinfo;
@@ -135,6 +137,11 @@ export class BaseConfigBuilder {
                                         const subResult = await ProxyParser.parse(item, this.userAgent);
                                         if (subResult) {
                                             parsedItems.push(subResult);
+                                        } else {
+                                            // Never drop a node silently: an unparsable
+                                            // endpoint is a real loss for the client.
+                                            console.warn(`[drop] unsupported/invalid node skipped: ${item.slice(0, 160)}`);
+                                            this.fetchErrors.push({ url: trimmedUrl, error: `unsupported node: ${item.slice(0, 120)}` });
                                         }
                                     }
                                 }
@@ -367,7 +374,11 @@ export class BaseConfigBuilder {
                 const convertedProxy = this.convertProxy(item);
                 if (convertedProxy) {
                     this.addProxyToConfig(convertedProxy);
+                } else {
+                    console.warn(`[drop] convertProxy returned empty for ${item.type} "${item.tag}"`);
                 }
+            } else {
+                console.warn(`[drop] node without tag skipped type=${item?.type ?? 'unknown'} server=${item?.server ?? '?'}:${item?.server_port ?? '?'} uuid=${item?.uuid ?? '?'}`);
             }
         });
     }
