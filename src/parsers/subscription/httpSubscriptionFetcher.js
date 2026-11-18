@@ -62,6 +62,14 @@ function normalizeBase64Candidate(text) {
  * @returns {string} - Decoded content
  */
 function decodeContent(text) {
+    // A body that already is plain subscription content must not be URL-decoded
+    // as a whole: that would turn percent-encoded data *inside* the URIs into
+    // raw characters (e.g. %2Bhttps%3A%2F%2F -> +https://), which corrupts
+    // those endpoints.
+    if (isPlainSubscriptionContent(text)) {
+        return text;
+    }
+
     const urlDecodedText = decodeUriComponentIfNeeded(text);
     if (isPlainSubscriptionContent(urlDecodedText)) {
         return urlDecodedText;
@@ -179,6 +187,29 @@ export async function fetchSubscription(url, userAgent, skipTlsVerify = false) {
 }
 
 /**
+ * Append a cache-busting parameter for hosts whose CDN caches aggressively.
+ *
+ * GitHub raw (used as the relay store) is served through a CDN that can hand
+ * out a stale snapshot to some edges. A stale relay store means silently
+ * missing nodes in every converted config, so the upstream request must not be
+ * served from a cached copy.
+ *
+ * @param {string} url - Target URL
+ * @returns {string} - URL with cache-busting parameter (when applicable)
+ */
+export function withCacheBuster(url) {
+    try {
+        const parsed = new URL(url);
+        const needsBust = /(^|\.)(githubusercontent\.com|github\.com)$/i.test(parsed.hostname);
+        if (!needsBust) return url;
+        parsed.searchParams.set('_t', Date.now().toString(36));
+        return parsed.toString();
+    } catch {
+        return url;
+    }
+}
+
+/**
  * Fetch with timeout, bounded retries and body-completeness validation.
  *
  * Rationale: upstream CDNs (e.g. GitHub raw for the relay store) occasionally
@@ -246,13 +277,14 @@ export async function fetchSubscriptionWithFormat(url, userAgent, skipTlsVerify 
             headers.set('User-Agent', userAgent);
         }
         const fetchOptions = await buildFetchOptions(headers, skipTlsVerify);
-        const { response, text } = await fetchWithRetry(url, fetchOptions);
+        const requestUrl = withCacheBuster(url);
+        const { response, text } = await fetchWithRetry(requestUrl, fetchOptions);
         const content = decodeContent(text);
         const format = detectFormat(content);
 
         const subscriptionUserinfo = response.headers.get('subscription-userinfo') || undefined;
 
-        return { content, format, url, subscriptionUserinfo };
+        return { content, format, url, subscriptionUserinfo, bytes: text.length, requestUrl };
     } catch (error) {
         console.error('Error fetching subscription:', error);
         return { error: error.message, url };
