@@ -48,11 +48,18 @@ function getClashUdpValue(proxy, defaultEnabled = true) {
 }
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, includeAutoSelect = true, globalGroupNodeSelect = false, skipTlsVerify = false) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, includeAutoSelect = true, globalGroupNodeSelect = false, skipTlsVerify = false, disableDns = false) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
         super(inputString, baseConfig, lang, userAgent, groupByCountry, includeAutoSelect, skipTlsVerify);
+        // Opt-out for the hardcoded `dns:` block. Some clients fail to boot when
+        // the generated DoH nameservers cannot resolve (they then can't download
+        // rule providers / GeoSite data). `disable_dns=true` omits the block so
+        // the client falls back to its own DNS settings.
+        if (disableDns) {
+            delete this.config['dns'];
+        }
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         this.countryGroupNames = [];
@@ -275,6 +282,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                         'public-key': proxy.tls.reality.public_key,
                         'short-id': proxy.tls.reality.short_id,
                         'support-x25519mlkem768': proxy.tls.reality.support_x25519mlkem768,
+                    } : undefined,
+                    'ech-opts': proxy.tls?.ech?.enabled ? {
+                        enable: true,
+                        ...(proxy.tls.ech.config ? { config: proxy.tls.ech.config } : {})
                     } : undefined,
                     'grpc-opts': proxy.transport?.type === 'grpc' ? {
                         'grpc-service-name': proxy.transport.service_name,

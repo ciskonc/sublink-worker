@@ -176,6 +176,7 @@ export function createApp(bindings = {}) {
             const globalGroupNodeSelect = parseBooleanFlag(c.req.query('global_group_node_select'));
             const configId = c.req.query('configId');
             const skipTlsVerify = parseBooleanFlag(c.req.query('skip_tls_verify'));
+            const disableDns = parseBooleanFlag(c.req.query('disable_dns'));
             const lang = c.get('lang');
 
             let baseConfig;
@@ -214,7 +215,8 @@ export function createApp(bindings = {}) {
                 externalUiDownloadUrl,
                 includeAutoSelect,
                 globalGroupNodeSelect,
-                skipTlsVerify
+                skipTlsVerify,
+                disableDns
             );
 
             // Cache-first: serving a fresh cached body keeps the per-request work

@@ -121,6 +121,16 @@ export function convertYamlProxyToObject(p) {
                 }
                 return undefined;
             })();
+
+            // Preserve ECH (Encrypted Client Hello) from Clash YAML `ech-opts`.
+            // Internal representation follows sing-box: tls.ech {enabled, config}.
+            if (tlsEnabled && p['ech-opts']?.enable) {
+                tls.ech = {
+                    enabled: true,
+                    ...(p['ech-opts'].config ? { config: p['ech-opts'].config } : {})
+                };
+            }
+
             return {
                 tag: name,
                 type: 'vless',
